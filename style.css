@@ -1,0 +1,25 @@
+p em {
+    color: orange;
+}
+
+g.axis path {
+    stroke: #ffffff;
+}
+g.tick line {
+    stroke: #ffffff;
+}
+g text {
+    fill: #ffffff;
+}
+
+/* g.x :hover { */
+/*     stroke: blue; */
+/* } */
+
+/* g.y :hover { */
+/*     stroke:green; */
+/* } */
+
+/* g.z :hover { */
+/*     stroke:red; */
+/* } */

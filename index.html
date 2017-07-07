@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Géolocalisation d'un piéton en temps réel</title>
+<meta name="author" content="(Dimitri Lozeve)"/>
+<style type="text/css">
+.underline { text-decoration: underline; }
+</style>
+<link rel="stylesheet" href="./reveal.js/css/reveal.css"/>
+
+<link rel="stylesheet" href="./reveal.js/css/theme/blood.css" id="theme"/>
+
+
+<!-- If the query includes 'print-pdf', include the PDF print sheet -->
+<script>
+    if( window.location.search.match( /print-pdf/gi ) ) {
+        var link = document.createElement( 'link' );
+        link.rel = 'stylesheet';
+        link.type = 'text/css';
+        link.href = './reveal.js/css/print/pdf.css';
+        document.getElementsByTagName( 'head' )[0].appendChild( link );
+    }
+</script>
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<link rel="stylesheet" href="style.css"><script src="./d3/d3.min.js"></script>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section id="sec-title-slide" data-background="Fleches-02.png"><h2>Géolocalisation d'un piéton en temps réel</h2><p>Dimitri Lozeve</p><p><a href="mailto:dimitri.lozeve@sysnav.fr">dimitri.lozeve@sysnav.fr</a></p>
+</section>
+
+<section>
+<section id="slide-orgd6fdeb1" data-background="./map_toner_lite_inv_dark.png" data-background-transition="slide">
+<h2 id="orgd6fdeb1">Objectifs</h2>
+</section>
+<section id="slide-org273b0aa">
+<h3 id="org273b0aa">GPS</h3>
+<ul>
+<li>GPS omniprésent et dominant aujourd'hui</li>
+<li>Problèmes intrinsèques :
+<ul>
+<li>dépend de signaux extérieurs</li>
+<li>précision et disponibilité non garanties</li>
+
+</ul></li>
+<li>Problème de la géolocalisation en intérieur : non résolu
+aujourd'hui</li>
+
+</ul>
+
+</section>
+<section id="slide-org5eb35d6" data-background="./Fleches-02.png" data-background-transition="slide">
+<h3 id="org5eb35d6">Sysnav</h3>
+<ul>
+<li class="fragment roll-in">Technologie Actimyo
+<ul>
+<li>applications médicales (détection de pas des patients
+myopathes)</li>
+<li>petit capteur porté à la cheville</li>
+
+</ul></li>
+<li class="fragment roll-in">Algorithme
+<ul>
+<li>en post-traitement (non causal)</li>
+<li>sur un supercalculateur</li>
+<li>très long (plusieurs heures)</li>
+
+</ul></li>
+<li class="fragment roll-in">Problèmes
+<ul>
+<li>déviation de cap fréquentes</li>
+<li>beaucoup de pas manqués</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+<section id="slide-org6f42e31" data-background="./actimyo.png">
+<h3 id="org6f42e31"></h3>
+
+</section>
+<section id="slide-org902ae01" data-background="./map_toner_lite_inv_dark.png" data-background-transition="slide">
+<h3 id="org902ae01">Objectif</h3>
+<ul>
+<li class="fragment roll-in">Reconstruire une trajectoire sur une carte</li>
+<li class="fragment roll-in">Données inertielles</li>
+<li class="fragment roll-in">Temps réel et embarqué</li>
+<li class="fragment roll-in">Deux difficultés :
+<ul>
+<li>ne pas utiliser les données futures !</li>
+<li>éviter les calculs coûteux</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-orga891380" data-background="data_dark.png">
+<h2 id="orga891380">Données</h2>
+</section>
+<section id="slide-org111bd95">
+<h3 id="org111bd95">Gyroscope</h3>
+<!-- <img style="height:50%; background:white; border:none; box-shadow:none;" src="./traj.gif"></img> -->
+<svg class="omega"></svg>
+
+<aside class="notes">
+<ul>
+<li>Gyro : vitesse angulaire [rad/s]</li>
+<li>Utile pour : les rotations</li>
+
+</ul>
+
+</aside>
+
+</section>
+<section id="slide-org43a57a8">
+<h3 id="org43a57a8">Accéléromètre</h3>
+<svg class="gamma"></svg>
+
+<aside class="notes">
+<ul>
+<li>Accéléro : accélération [m/s²]</li>
+<li>Utile pour : les chocs</li>
+
+</ul>
+
+</aside>
+
+</section>
+</section>
+<section>
+<section id="slide-org3410f85">
+<h2 id="org3410f85">Intégration pure ?</h2>
+
+<div class="figure">
+<p><img src="./inertiel_classique_crop.png" alt="inertiel_classique_crop.png" />
+</p>
+</div>
+
+<ul>
+<li>Bruit, biais, dérive</li>
+<li>Impossible à corriger directement</li>
+
+</ul>
+
+<aside class="notes">
+<p>
+Trop de bruit, trop de dérive -&gt; impossible
+</p>
+
+</aside>
+
+</section>
+</section>
+<section>
+<section id="slide-orgb9ab482" data-background="ekf_dark.png">
+<h2 id="orgb9ab482">Filtre de Kalman</h2>
+</section>
+<section id="slide-org3afbf2e">
+<h3 id="org3afbf2e">États et covariance</h3>
+<ul>
+<li>États :
+<ul>
+<li>Vitesse</li>
+<li>Erreur</li>
+<li>Quaternion</li>
+
+</ul></li>
+<li>Covariance (en racine carrée)</li>
+
+</ul>
+
+</section>
+<section id="slide-org663ad9c">
+<h3 id="org663ad9c">Attitude ou position ?</h3>
+<ul>
+<li class="fragment roll-in">si pas ou peu de mouvement :
+<ul>
+<li>uniquement un filtre d'attitude (orientation), vitesse nulle</li>
+
+</ul></li>
+<li class="fragment roll-in">si mouvement :
+<ul>
+<li>filtre complet (vitesse)</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org4e42ef6">
+<h2 id="org4e42ef6">Recalages</h2>
+<ul>
+<li class="fragment roll-in">État de l'art : recalage <i>à zéro</i> (vitesse nulle)</li>
+<li class="fragment roll-in">Innovation : recalage <i>dynamique</i>
+<ul>
+<li>lorsque le pied est rotation (bras de levier)</li>
+
+</ul></li>
+<li class="fragment roll-in">en pratique : filtre d'attitude jusqu'au recalage
+<ul>
+<li>puis on revient au recalage précédent pour filtrer</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org65c92f0">
+<h2 id="org65c92f0">Lissage</h2>
+<ul>
+<li>entre deux recalages : <i>forward</i> puis <i>backward</i></li>
+<li>lissage :</li>
+
+</ul>
+<p>
+\[
+  X = P ( P_{f}^{-1} X_{f} + P_{b}^{-1} X_{b} )
+  \]
+\[
+  P = {( P_{f}^{-1} + P_{b}^{-1} )}^{-1}
+  \]
+</p>
+
+</section>
+</section>
+<section>
+<section id="slide-orgee8050f" data-background="walk.gif">
+<h2 id="orgee8050f">Décomposer la marche</h2>
+</section>
+<section id="slide-orgd37b0e5">
+<h3 id="orgd37b0e5">Machines à états finis</h3>
+
+<div class="figure">
+<p><img src="./fsm.png" alt="fsm.png" height="150px" />
+</p>
+</div>
+
+<div class="figure">
+<p><img src="./acc_norm.png" alt="acc_norm.png" height="120px" />
+</p>
+</div>
+
+<div class="figure">
+<p><img src="./gyr_y.png" alt="gyr_y.png" height="120px" />
+</p>
+</div>
+
+<aside class="notes">
+<p>
+Machine d'états 
+</p>
+
+<p>
+Exemple d'un pas : transitions à effectuer en explicitant les
+conditions
+</p>
+
+</aside>
+
+</section>
+<section >
+
+
+<div class="figure">
+<p><img src="./ai_inside.jpg" alt="ai_inside.jpg" />
+</p>
+</div>
+
+</section>
+<section id="slide-org124a3e5">
+<h3 id="org124a3e5">Apprentissage</h3>
+<ul>
+<li class="fragment roll-in">Détecter les phases où le pied au sol</li>
+<li class="fragment roll-in">Classification de série temporelle multivariée</li>
+<li class="fragment roll-in">Classes déséquilibrées</li>
+<li class="fragment roll-in">Méthodes envisagées :
+<ul>
+<li>Arbres</li>
+<li>Petits réseaux de neurones</li>
+<li>SVMs</li>
+
+</ul></li>
+
+</ul>
+
+</section>
+<section id="slide-orge00a9c3">
+<h4 id="orge00a9c3">Arbres</h4>
+<ul>
+<li>Avantages
+<ul>
+<li>conceptuellement proche de la machine à états finis (série de
+branchements)</li>
+<li>automatise la découverte et la maintenance d'une longue liste
+de conditions de transitions</li>
+<li>très efficace pour de la classification déséquilibrée</li>
+
+</ul></li>
+<li>Inconvénients
+<ul>
+<li>espace mémoire du modèle important</li>
+<li>difficile à implémenter (exporter des centaines de branchements
+conditionnels)</li>
+
+</ul></li>
+<li>Pas testé dans un contexte embarqué</li>
+
+</ul>
+
+</section>
+<section id="slide-org9387a7e">
+<h4 id="org9387a7e">Réseaux de neurones</h4>
+<ul>
+<li>Avantages
+<ul>
+<li>représentation simple du modèle : ensemble de matrices de
+poids et de biais</li>
+<li>étape de prédiction facile à implémenter (multiplications
+matricielles)</li>
+
+</ul></li>
+<li>Inconvénients
+<ul>
+<li>peu efficaces aux petites dimensions</li>
+<li>interprétation des transitions impossible</li>
+<li>prédiction peut devenir coûteuse en calcul</li>
+
+</ul></li>
+<li>Tests avec un réseau 6 → 512 → 256 → 2 : peu probant aux cas limites</li>
+
+</ul>
+
+</section>
+<section id="slide-org9dcd63e">
+<h4 id="org9dcd63e">Support Vector Machines</h4>
+<ul>
+<li>Avantages
+<ul>
+<li>représentation simple (hyperplan), facile à implémenter</li>
+<li>bonnes performances</li>
+
+</ul></li>
+<li>Inconvénients
+<ul>
+<li>besoin de monter en dimensions : coûteux</li>
+
+</ul></li>
+<li>Test avec un classifieur linéaire avec \(C\) élevé (pour éviter
+les faux positifs) : meilleurs résultats</li>
+
+</ul>
+
+</section>
+<section >
+
+<div class="figure">
+<p><img src="./svm.png" alt="svm.png" />
+</p>
+</div>
+
+</section>
+</section>
+<section>
+<section id="slide-orgce42cf5">
+<h2 id="orgce42cf5">Intégration</h2>
+<svg class="traj"></svg>
+
+<aside class="notes">
+<p>
+Ce qu'il reste à faire ? Intégrer !
+</p>
+
+</aside>
+
+</section>
+</section>
+<section>
+<section id="slide-orgcff1714" data-background="platformtracker_dark.png">
+<h2 id="orgcff1714">Affichage</h2>
+<aside class="notes">
+<ul>
+<li>Distances en mètres peu utile</li>
+<li>Convertir en lat/lon</li>
+
+</ul>
+
+</aside>
+
+</section>
+<section id="slide-org9d72bc6">
+<h3 id="org9d72bc6">Post-traitement</h3>
+<ul>
+<li>Distances obtenues en mètres</li>
+<li>Fixer un point d'origine</li>
+<li>Transformer en latitude/longitude</li>
+
+</ul>
+
+</section>
+</section>
+<section>
+<section id="slide-org489000a" data-background="./Fleches-02.png">
+<h2 id="org489000a">Conclusion</h2>
+<ul>
+<li>Post-traitement → temps réel</li>
+<li>Grosse puissance de calcul → embarqué</li>
+<li>Reconstitution fidèle de la trajectoire</li>
+<li>Introduction de nouvelles méthodes (recalage dynamique,
+apprentissage&#x2026;)</li>
+
+</ul>
+</section>
+</section>
+</div>
+</div>
+<script src="gamma.js"></script><script src="omega.js"></script></script><script src="traj.js"></script>
+<script src="./reveal.js/lib/js/head.min.js"></script>
+<script src="./reveal.js/js/reveal.js"></script>
+
+<script>
+// Full list of configuration options available here:
+// https://github.com/hakimel/reveal.js#configuration
+Reveal.initialize({
+
+controls: true,
+progress: true,
+history: false,
+center: true,
+slideNumber: 'c',
+rollingLinks: false,
+keyboard: true,
+overview: true,
+
+theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+transitionSpeed: 'default',
+multiplex: {
+    secret: '', // null if client
+    id: '', // id, obtained from socket.io server
+    url: '' // Location of socket.io server
+},
+
+// Optional libraries used to extend on reveal.js
+dependencies: [
+ { src: './reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+ { src: './reveal.js/plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+ { src: './reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+ { src: './reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }]
+});
+</script>
+</body>
+</html>

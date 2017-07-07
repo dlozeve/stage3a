@@ -1,0 +1,263 @@
+#+TITLE: Géolocalisation d'un piéton en temps réel
+#+AUTHOR: Dimitri Lozeve
+#+EMAIL: dimitri.lozeve@sysnav.fr
+
+#+OPTIONS: reveal_title_slide:"<h2>%t</h2><p>%a</p><p>%e</p>"
+#+REVEAL_TITLE_SLIDE_BACKGROUND: Fleches-02.png
+#+OPTIONS: num:nil toc:0
+#+REVEAL_HLEVEL: 1
+#+REVEAL_THEME: blood
+#+REVEAL_TRANS: linear
+
+#+REVEAL_HEAD_PREAMBLE: <link rel="stylesheet" href="style.css"><script src="./d3/d3.min.js"></script>
+#+REVEAL_POSTAMBLE: <script src="gamma.js"></script><script src="omega.js"></script></script><script src="traj.js"></script>
+
+* Objectifs
+  :PROPERTIES:
+  :reveal_background: ./map_toner_lite_inv_dark.png
+  :reveal_background_trans: slide
+  :END:
+
+** GPS
+
+  + GPS omniprésent et dominant aujourd'hui
+  + Problèmes intrinsèques :
+    + dépend de signaux extérieurs
+    + précision et disponibilité non garanties
+  + Problème de la géolocalisation en intérieur : non résolu
+    aujourd'hui
+
+** Sysnav
+   :PROPERTIES:
+   :reveal_background: ./Fleches-02.png
+   :reveal_background_trans: slide
+   :END:
+
+   #+ATTR_REVEAL: :frag (roll-in roll-in roll-in roll-in)
+   + Technologie Actimyo
+     + applications médicales (détection de pas des patients
+       myopathes)
+     + petit capteur porté à la cheville
+   + Algorithme
+     + en post-traitement (non causal)
+     + sur un supercalculateur
+     + très long (plusieurs heures)
+   + Problèmes
+     + déviation de cap fréquentes
+     + beaucoup de pas manqués
+
+** 
+   :PROPERTIES:
+   :reveal_background: ./actimyo.png
+   :END:
+
+** Objectif
+   :PROPERTIES:
+   :reveal_background: ./map_toner_lite_inv_dark.png
+   :reveal_background_trans: slide
+   :END:
+
+   #+ATTR_REVEAL: :frag (roll-in roll-in roll-in roll-in)
+     + Reconstruire une trajectoire sur une carte
+     + Données inertielles
+     + Temps réel et embarqué
+     + Deux difficultés :
+       + ne pas utiliser les données futures !
+       + éviter les calculs coûteux
+
+* Données
+  :PROPERTIES:
+  :reveal_background: data_dark.png
+  :END:
+
+** Gyroscope
+
+   #+BEGIN_EXPORT html
+   <!-- <img style="height:50%; background:white; border:none; box-shadow:none;" src="./traj.gif"></img> -->
+   <svg class="omega"></svg>
+   #+END_EXPORT
+
+   #+BEGIN_NOTES
+   + Gyro : vitesse angulaire [rad/s]
+   + Utile pour : les rotations
+   #+END_NOTES
+ 
+** Accéléromètre
+
+   #+BEGIN_EXPORT html
+   <svg class="gamma"></svg>
+   #+END_EXPORT
+
+   #+BEGIN_NOTES
+   + Accéléro : accélération [m/s²]
+   + Utile pour : les chocs
+   #+END_NOTES
+
+* Intégration pure ?
+
+  [[./inertiel_classique_crop.png]]
+
+  + Bruit, biais, dérive
+  + Impossible à corriger directement
+
+  #+BEGIN_NOTES
+  Trop de bruit, trop de dérive -> impossible
+  #+END_NOTES
+
+* Filtre de Kalman
+  :PROPERTIES:
+  :reveal_background: ekf_dark.png
+  :END:
+
+** États et covariance
+
+   + États :
+     + Vitesse
+     + Erreur
+     + Quaternion
+   + Covariance (en racine carrée)
+
+** Attitude ou position ?
+
+   #+ATTR_REVEAL: :frag (roll-in roll-in)
+      + si pas ou peu de mouvement :
+	+ uniquement un filtre d'attitude (orientation), vitesse nulle
+      + si mouvement :
+	+ filtre complet (vitesse)
+
+* Recalages
+
+  #+ATTR_REVEAL: :frag (roll-in roll-in roll-in)
+  + État de l'art : recalage /à zéro/ (vitesse nulle)
+  + Innovation : recalage /dynamique/
+    + lorsque le pied est rotation (bras de levier)
+  + en pratique : filtre d'attitude jusqu'au recalage
+    + puis on revient au recalage précédent pour filtrer
+
+* Lissage
+
+  + entre deux recalages : /forward/ puis /backward/
+  + lissage :
+  \[
+  X = P ( P_{f}^{-1} X_{f} + P_{b}^{-1} X_{b} )
+  \]
+  \[
+  P = {( P_{f}^{-1} + P_{b}^{-1} )}^{-1}
+  \]
+
+  # explications
+
+* Décomposer la marche
+  :PROPERTIES:
+  :reveal_background: walk.gif
+  :END:
+
+** Machines à états finis
+
+   #+attr_html: :height 150px
+   [[./fsm.png]]
+   #+attr_html: :height 120px
+   [[./acc_norm.png]]
+   #+attr_html: :height 120px
+   [[./gyr_y.png]]
+
+   # données accéléro/gyro d'un pas typique pour étudier les transitions ?
+
+   #+BEGIN_NOTES
+   Machine d'états 
+
+   Exemple d'un pas : transitions à effectuer en explicitant les
+   conditions
+   #+END_NOTES
+
+#+REVEAL: split
+
+   [[./ai_inside.jpg]]
+
+** Apprentissage
+
+   #+ATTR_REVEAL: :frag (roll-in roll-in roll-in roll-in)
+   + Détecter les phases où le pied au sol
+   + Classification de série temporelle multivariée
+   + Classes déséquilibrées
+   + Méthodes envisagées :
+     + Arbres
+     + Petits réseaux de neurones
+     + SVMs
+
+*** Arbres
+
+    + Avantages
+      + conceptuellement proche de la machine à états finis (série de
+	branchements)
+      + automatise la découverte et la maintenance d'une longue liste
+	de conditions de transitions
+      + très efficace pour de la classification déséquilibrée
+    + Inconvénients
+      + espace mémoire du modèle important
+      + difficile à implémenter (exporter des centaines de branchements
+	conditionnels)
+    + Pas testé dans un contexte embarqué
+
+*** Réseaux de neurones
+
+    + Avantages
+      + représentation simple du modèle : ensemble de matrices de
+        poids et de biais
+      + étape de prédiction facile à implémenter (multiplications
+        matricielles)
+    + Inconvénients
+      + peu efficaces aux petites dimensions
+      + interprétation des transitions impossible
+      + prédiction peut devenir coûteuse en calcul
+    + Tests avec un réseau 6 → 512 → 256 → 2 : peu probant aux cas limites
+
+*** Support Vector Machines
+
+    + Avantages
+      + représentation simple (hyperplan), facile à implémenter
+      + bonnes performances
+    + Inconvénients
+      + besoin de monter en dimensions : coûteux
+    + Test avec un classifieur linéaire avec $C$ élevé (pour éviter
+      les faux positifs) : meilleurs résultats
+
+ #+REVEAL: split
+    [[./svm.png]]
+
+* Intégration
+
+  #+BEGIN_EXPORT html
+  <svg class="traj"></svg>
+  #+END_EXPORT
+
+  #+BEGIN_NOTES
+  Ce qu'il reste à faire ? Intégrer !
+  #+END_NOTES
+
+* Affichage
+  :PROPERTIES:
+  :reveal_background: platformtracker_dark.png
+  :END:
+
+  #+BEGIN_NOTES
+  + Distances en mètres peu utile
+  + Convertir en lat/lon
+  #+END_NOTES
+
+** Post-traitement
+
+   + Distances obtenues en mètres
+   + Fixer un point d'origine
+   + Transformer en latitude/longitude
+
+* Conclusion
+  :PROPERTIES:
+  :reveal_background: ./Fleches-02.png
+  :END:
+
+  + Post-traitement → temps réel
+  + Grosse puissance de calcul → embarqué
+  + Reconstitution fidèle de la trajectoire
+  + Introduction de nouvelles méthodes (recalage dynamique,
+    apprentissage...)
